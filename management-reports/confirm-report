@@ -1,3 +1,5 @@
+--Confirm Report & Scheduled/Completed Tooltips
+
 select t4.region, t4.org_code, t5.week, 
     scheduled.event_date, scheduled.vanid, scheduled.eventsignupid,
     t4.organizer, 
