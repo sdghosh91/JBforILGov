@@ -1,3 +1,5 @@
+--Flake Weekly (likely doesn’t need to change much -- add % Confirmed column?)
+
 select b.region, b.org_code, a.organizer, a.week, a.event_date, a.vanid, a.eventsignupid, case when (a.completed=0 and (a.scheduled+a.confirmed+a.left_msg+a.conf_twice>0)) then 'flake' else null end as flakes from
 (
 select t1.eventsignupid, t1.vanid, t3.lastname+', '+t3.firstname as organizer, t4.week, cast(left(t1.datetimeoffsetbegin,10) as date) as event_date,
