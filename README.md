@@ -2,7 +2,7 @@
 
 How To Add New Folders/Files
 - navigate to main JBforILGov page
-- select "add file"
+- select "create new file"
 - where it says JBforILGov/______ , type your folder name after the / and then your file name after the next / (i.e. JBforILGov/FolderName/FileName)
 - if not adding a folder, just navigate to the folder you want and select "add file"
 
