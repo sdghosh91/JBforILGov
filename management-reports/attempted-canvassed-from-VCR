@@ -1,0 +1,23 @@
+--Attempted/Canvassed (from VCR - needs edits)
+
+select t3.org_code, t8.week, sum(t7.attempted) as attempts, sum(t7.canvassed) as canvasseds, round(CAST(sum(t7.canvassed) AS decimal)/sum(t7.attempted),3) AS contact_rate  from
+(
+SELECT t1.vanid, left(t1.datecanvassed,10) AS date_contacted,
+COUNT(CASE resultid WHEN '14' THEN 1 ELSE null END) AS canvassed,
+COUNT(resultid) AS attempted
+FROM
+vansync_il_gov_2018.dnc_contactscontacts_myc T1
+ WHERE t1.contacttypeid='1'
+ group by 1, 2
+) T7
+JOIN
+(
+(select vanid, max(left(datecreated, 10)) as date_turf_applied from vansync_il_gov_2018.dnc_contactsnotes_myc
+Where notetext like 'zzzzzzFO_REGIONzzzzzz:%'
+group by 1) T1
+left JOIN
+(select vanid as mycid, right(notetext,3) as org_code, left(datecreated,10) as date_turf_applied2 from vansync_il_gov_2018.dnc_contactsnotes_myc
+Where notetext like 'zzzzzzFO_REGIONzzzzzz:%') T2 on t2.date_turf_applied2=t1.date_turf_applied AND t1.vanid=t2.mycid) T3 on t3.vanid=t7.vanid
+JOIN public.weeks T8 on t8.date=t7.date_contacted
+
+group by 1, 2
