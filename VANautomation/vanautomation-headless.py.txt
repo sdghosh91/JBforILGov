@@ -1,0 +1,32 @@
+import selenium
+import time
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import Select
+from selenium.webdriver.chrome.options import Options
+
+options = Options()
+options.add_argument('--headless')
+options.add_argument('--disable-gpu')
+options.add_argument('window-size=1200x600')
+chrome_path=webdriver.Chrome("C:\SeleniumDrivers\chromedriver", chrome_options=options)
+
+#open webpage, wait
+chrome_path.get('https://www.votebuilder.com/Login.aspx?OIDF=1')
+time.sleep(5)
+
+#input username, wait
+username = chrome_path.find_element_by_xpath("//*[@id='TextBoxUserName']")
+username.send_keys("jb_sghost")
+time.sleep(5)
+
+#input password, wait
+password = chrome_path.find_element_by_xpath("//*[@id='TextBoxPassword']")
+password.send_keys("jbforilgov18")
+time.sleep(5)
+
+#click "log in" button, wait
+chrome_path.find_element_by_xpath("//*[@id='ctl00_ContentPlaceHolderVANPage_ButtonLogin']").click()
+time.sleep(5)
+
+chrome_path.get_screenshot_as_file('main-page.png')
