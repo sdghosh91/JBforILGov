@@ -1,0 +1,23 @@
+select b.region, b.org_code, a.organizer, a.week, a.event_date, a.vanid, a.eventsignupid, case when (a.completed=0 and (a.scheduled+a.confirmed+a.left_msg+a.conf_twice>0)) then 'flake' else null end as flakes from
+(
+select t1.eventsignupid, t1.vanid, t3.lastname+', '+t3.firstname as organizer, t4.week, cast(left(t1.datetimeoffsetbegin,10) as date) as event_date,
+count(case when (t2.eventstatusid='2') THEN 1 else null end) as completed, 
+count(case when (t2.eventstatusid='1') and cast(left(t2.datemodified,10) as date) <= cast(left(t1.datetimeoffsetbegin,10) as date)-1 THEN 1 else null end) as scheduled,  
+count(case when (t2.eventstatusid='3') and cast(left(t2.datemodified,10) as date) <= cast(left(t1.datetimeoffsetbegin,10) as date)-1 THEN 1 else null end) as declined,
+count(case when (t2.eventstatusid='11') and cast(left(t2.datemodified,10) as date) <= cast(left(t1.datetimeoffsetbegin,10) as date)-1 THEN 1 else null end) as confirmed,
+count(case when (t2.eventstatusid='18') and cast(left(t2.datemodified,10) as date) <= cast(left(t1.datetimeoffsetbegin,10) as date)-1 THEN 1 else null end) as left_msg,
+count(case when (t2.eventstatusid='6') THEN 1 else null end) as no_show,
+count(case when (t2.eventstatusid='15') and cast(left(t2.datemodified,10) as date)<= cast(left(t1.datetimeoffsetbegin,10) as date)-1 THEN 1 else null end) as conf_twice
+from vansync_il_gov_2018.dnc_eventsignups T1
+join vansync_il_gov_2018.dnc_eventsignupsstatuses T2 on t1.eventsignupid=t2.eventsignupid
+join vansync_il_gov_2018.dnc_users t3 on t3.userid=t1.canvassedby
+join public.weeks t4 on t4.date=left(t1.datetimeoffsetbegin,10)
+WHERE (
+  (t1.eventroleid='191345' OR t1.eventroleid='186915' OR t1.eventroleid='186911')
+  AND (left(t2.datecreated,10)>='2017-07-24' AND left(t2.datecreated,10)<=getdate()) 
+  )
+Group by 1, 2, 3, 4, 5
+Order by 1) A
+join public.matchfile_orgcode b on b.organizer=a.organizer
+where (a.scheduled>0 or a.confirmed>0 or a.left_msg>0 or a.conf_twice>0)
+and a.event_date < getdate()
