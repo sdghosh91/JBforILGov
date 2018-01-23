@@ -1,0 +1,28 @@
+-- this is the shifts scheduled this week sql
+
+select a.organizer, count(a.eventsignupid) as shifts_scheduled from
+(select P.eventsignupid, P.vanid, p.organizer from 
+(select t1.eventsignupid, t1.vanid, min(t2.datecreated) as signup_date
+from vansync_il_gov_2018.dnc_eventsignups T1
+join vansync_il_gov_2018.dnc_eventsignupsstatuses T2 on t1.eventsignupid=t2.eventsignupid                             
+group by 1, 2 
+) Q
+JOIN
+(select t1.eventsignupid, t1.vanid, t2.datecreated, t3.lastname+', '+t3.firstname as organizer
+from vansync_il_gov_2018.dnc_eventsignups T1
+join vansync_il_gov_2018.dnc_eventsignupsstatuses T2 on t1.eventsignupid=t2.eventsignupid
+join vansync_il_gov_2018.dnc_users t3 on t3.userid=t1.canvassedby
+WHERE (
+  (t1.eventroleid='191345' OR t1.eventroleid='186915' OR t1.eventroleid='186911')
+-- need to update the dates weekly
+  AND (left(t2.datecreated,10)>='2018-01-15' AND left(t2.datecreated,10)<='2018-01-21') 
+  AND (t2.eventstatusid='1' or t2.eventstatusid='11')
+  )
+  AND (cast(left(t1.datetimeoffsetbegin,10) as date)>='2018-01-15')
+ ) P on (p.eventsignupid=q.eventsignupid AND p.vanid=q.vanid AND p.datecreated=q.signup_date)
+) A
+group by 1
+order by 2 desc
+
+--Missing:
+--Tooltips SQL
