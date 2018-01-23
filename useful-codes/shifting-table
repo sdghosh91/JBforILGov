@@ -1,4 +1,4 @@
--- shifting table
+-- AKA "reporting table"
 
 select t1.eventsignupid
 , t1.vanid
