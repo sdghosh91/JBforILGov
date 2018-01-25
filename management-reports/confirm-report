@@ -1,11 +1,14 @@
---Confirm Report & Scheduled/Completed Tooltips
+--Confirm Report & All Tooltips
 
 select t4.region, t4.org_code, t5.week, 
     scheduled.event_date, scheduled.eventsignupid, scheduled.vanid,
     t4.organizer, 
     case when (scheduled.confirmed>0 and scheduled.declined=0) then 1 else null end as confirmeds, 
-    scheduled as scheduled_shifts,
-    completed as completed_shifts
+    count(case when scheduled>0 or confirmed>0 then 1 else null end) as scheduled_shifts,
+    completed as completed_shifts,
+    invited as invited_shifts,
+    count(case when invited>0 and completed>0 then 1 else null end) as inv_comp,
+    count(case when scheduled>0 and completed>0 and invited=0 then 1 else null end) as sched_comp
 from
 (
     select signup.eventsignupid, signup.vanid, signup.canvassedby,
@@ -35,3 +38,6 @@ count(case when (t2.eventstatusid='4')THEN 1 else null end) as invited
 join vansync_il_gov_2018.dnc_users t3 on t3.userid=scheduled.canvassedby
 join public.matchfile_orgcode t4 on t4.organizer=t3.lastname+', '+t3.firstname
 join public.weeks t5 on t5.date=scheduled.event_date
+group by t4.region, t4.org_code, t5.week, 
+    scheduled.event_date, scheduled.eventsignupid, scheduled.vanid,
+    t4.organizer, confirmeds, completed_shifts, invited_shifts
