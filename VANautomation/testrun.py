@@ -75,6 +75,8 @@ def main():
             j = os.path.join(path,i)
             with zipfile.ZipFile(j,"r") as zip_ref:
                 zip_ref.extractall(path)
+                zip_ref.close()
+                os.remove(j) 
 
     for k in os.listdir(path):
         if os.path.isfile(os.path.join(path,k)) and k.endswith('.txt') and k.startswith(fileName):
@@ -102,9 +104,11 @@ def main():
     service = discovery.build('sheets', 'v4', http=http,
                               discoveryServiceUrl=discoveryUrl)
 
-    spreadsheetId = '19HRYvamCexyhnOzwCj-p-aCdHxwmeHi-g6L9o8K4vbc'
+    spreadsheetId1 = '19HRYvamCexyhnOzwCj-p-aCdHxwmeHi-g6L9o8K4vbc' # call time
+    spreadsheetId2 = '1DCrWd3PLe4NQsPy7b7X8sFxLP_rN8qSDruRMP36fOYE' # confirm
     rangeName1 = 'test6PM'
     rangeName2 = 'test8PM'
+    rangeName3 = 'testrawdata'
 
     """ **not sure what this does**
     result = service.spreadsheets().values().get(
