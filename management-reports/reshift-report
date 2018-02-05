@@ -1,56 +1,65 @@
---Reshift Weekly (likely doesn’t need to change much)
+--Reshift
 
-SELECT t5.region, t6.week,
-(CASE WHEN SUM(rate.reshift_good) = 0 AND SUM(rate.reshift_fail) = 0 THEN NULL
-WHEN SUM(rate.reshift_fail) = 0 AND SUM(rate.reshift_good) > 0 THEN 1.0
-ELSE CAST(SUM(rate.reshift_good) AS decimal) / (SUM(rate.reshift_fail) + SUM(rate.reshift_good))
-END) AS total_reshift_rate
-FROM
-(
-select base.canvassedby, base.completed, 
-   	(case when SUM(base.reshift_good) = 0 AND SUM(base.reshift_fail) = 0 then null
-        	when SUM(base.reshift_fail) = 0 AND SUM(base.reshift_good) > 0 then 1.0
-      	else CAST(SUM(base.reshift_good) AS decimal) / (SUM(base.reshift_fail) + SUM(base.reshift_good))
-   	end) as reshift_rate,
-   	SUM(base.reshift_good) as reshift_good,
-    	SUM(base.reshift_fail) as reshift_fail
+select reshift.region, reshift.org_code, reshift.organizer, reshift.week, reshift.completed, reshift.vanid, reshift.reshift_sched, reshift.reshift_inv, reshift.reshift_fail
 from
 (
-SELECT completes.canvassedby, completes.completed, completes.eventsignupid, 
-MAX(CASE WHEN completes.completed = intervals.anystart THEN 1 ELSE 0 END) AS reshift_good,
-MAX(CASE WHEN intervals.eventsignupid IS NULL THEN 1 ELSE 0 END) AS reshift_fail
-FROM
+Select t5.region, t5.org_code, t5.organizer, t6.week, base.completed, base.vanid, 
+    SUM(base.reshift_sched) as reshift_sched,
+    SUM(base.reshift_inv) as reshift_inv,
+    SUM(base.reshift_fail) as reshift_fail
+From
 (
-select t2.canvassedby,  t1.vanid,  t2.eventsignupid, max(left(t3.datemodified,10)) as completed
-from vansync_il_gov_2018.dnc_contacts_myc t1
-join vansync_il_gov_2018.dnc_eventsignups t2 ON t1.vanid=t2.vanid
-join vansync_il_gov_2018.dnc_eventsignupsstatuses t3 ON t2.eventsignupid=t3.eventsignupid
-where (t2.eventroleid='191345' or t2.eventroleid='186915' or t2.eventroleid='186911') 
-and T3.eventstatusid = '2'
-group by t2.canvassedby, t1.vanid, t2.eventsignupid) as completes
+    SELECT completes.canvassedby, completes.completed, completes.vanid,
+    MAX(CASE WHEN (completes.completed = intervals.anystart AND start_status = 'scheduled' AND completes.eventsignupid <> intervals.eventsignupid) THEN 1 ELSE 0 END) AS reshift_sched,
+    MAX(CASE WHEN (completes.completed = intervals.anystart AND start_status = 'invited' AND start_status <> 'scheduled') THEN 1 ELSE 0 END) AS reshift_inv,
+    MAX(CASE WHEN intervals.eventsignupid IS NULL THEN 1 ELSE 0 END) AS reshift_fail
+    FROM
+        (
+          select t2.canvassedby,  t1.vanid,  t2.eventsignupid, left( t2.datetimeoffsetbegin,10) as completed
+          from vansync_il_gov_2018.dnc_contacts_myc t1
+          join vansync_il_gov_2018.dnc_eventsignups t2 ON t1.vanid=t2.vanid
+          join vansync_il_gov_2018.dnc_eventsignupsstatuses t3 ON t2.eventsignupid=t3.eventsignupid and t2.currenteventsignupseventstatusid=t3.eventsignupseventstatusid
+          where (t2.eventroleid='191345' or t2.eventroleid='186915' or t2.eventroleid='186911') 
+          and T3.eventstatusid = '2'
+          group by t2.canvassedby, t1.vanid, t2.eventsignupid, completed
+        ) as completes
+    LEFT JOIN
+        (
+            select canvassedby, vanid, eventsignupid, anystart, start_status
+            from
+               (
+                    select t2.canvassedby, t1.vanid, t2.eventsignupid, left( t2.datetimeoffsetbegin,10) as shift_date,
+                    min(case when t3.eventstatusid in ('1', '4', '11', '15', '18') then left(t3.datemodified,10) else null end) as anystart,
+                    min(case when t3.eventstatusid='4' then 'invited' else 'scheduled' end) as start_status
+                    from vansync_il_gov_2018.dnc_contacts_myc t1
+                    join vansync_il_gov_2018.dnc_eventsignups t2 on t1.vanid=t2.vanid
+                    join vansync_il_gov_2018.dnc_eventsignupsstatuses t3 on t2.eventsignupid=t3.eventsignupid
+                            where (t2.eventroleid='191345' or t2.eventroleid='186915' or t2.eventroleid='186911') 
+                            and left(t3.datecreated,10)>='2017-07-24'
+                    group by t2.canvassedby, t1.vanid, t2.eventsignupid, shift_date
+               ) as intervals
+            where anystart <> shift_date
+      ) AS intervals
+ON completes.vanid = intervals.vanid 
+    and intervals.anystart = completes.completed 
+GROUP BY completes.canvassedby, completes.completed, completes.vanid) as base
+JOIN vansync_il_gov_2018.dnc_users t4 ON base.canvassedby=t4.userid
+JOIN public.matchfile_orgcode t5 ON (t4.lastname+', '+t4.firstname)=t5.organizer
+JOIN public.weeks t6 ON t6.date=base.completed
+group by t5.region, t5.org_code, t5.organizer, t6.week, base.completed, base.vanid
+) as reshift
 LEFT JOIN
 (
-    		select canvassedby, vanid, eventsignupid, anystart,
-    		case when (anyend is null or anyend > shift_date) then shift_date else anyend end as anyend
-    		from
-    			(
-        			select t2.canvassedby, t1.vanid, t2.eventsignupid, left( t2.datetimeoffsetend,10) as shift_date,
-        			min(case when t3.eventstatusid in ('1', '11', '15', '18') then left(t3.datemodified,10) else null end) as anystart,
-       	 		max(case when t3.eventstatusid in ('2','3','6') then left(t3.datemodified,10) else null end) as anyend
-        			from vansync_il_gov_2018.dnc_contacts_myc t1
-        			join vansync_il_gov_2018.dnc_eventsignups t2 on t1.vanid=t2.vanid
-        			join vansync_il_gov_2018.dnc_eventsignupsstatuses t3 on t2.eventsignupid=t3.eventsignupid
-        				where (t2.eventroleid='191345' or t2.eventroleid='186915' or t2.eventroleid='186911') 
-                			and left(t3.datecreated,10)>='2017-07-24'
-        			group by t2.canvassedby, t1.vanid, t2.eventsignupid, shift_date
-    			) as intervals
-) AS intervals ON completes.vanid = intervals.vanid 
-        		AND intervals.anystart <= completes.completed
-        		AND completes.completed < intervals.anyend
-GROUP BY completes.canvassedby, completes.completed, completes.eventsignupid) as base
-group by base.completed, base.canvassedby) as rate
-JOIN vansync_il_gov_2018.dnc_users t4 ON rate.canvassedby=t4.userid
-JOIN public.matchfile_orgcode t5 ON (t4.lastname+', '+t4.firstname)=t5.organizer
-JOIN public.weeks t6 ON t6.date=rate.completed
-GROUP BY t5.region, t6.week
-ORDER BY t5.region, t6.week
+    select t3.organizer, a.vanid 
+    from vansync_il_gov_2018.dnc_contactssurveyresponses_myc T1
+    JOIN
+    (
+        select vanid, max(datecanvassed) as date_applied from vansync_il_gov_2018.dnc_contactssurveyresponses_myc
+        where (surveyquestionid=262290)
+        group by 1 ) A on (a.vanid=t1.vanid and t1.datecanvassed=a.date_applied)
+        JOIN vansync_il_gov_2018.dnc_users T2 on t1.canvassedby=t2.userid
+        JOIN public.matchfile_orgcode T3 on t3.organizer=(t2.lastname+', '+t2.firstname)
+        where (t1.surveyresponseid=1096003 or t1.surveyresponseid=1096004)
+    ) as fellows
+on reshift.vanid=fellows.vanid
+    where fellows.vanid is null
