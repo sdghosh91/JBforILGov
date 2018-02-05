@@ -1,5 +1,7 @@
 --Flake Report
 
+Select flakes.region, flakes.org_code, flakes.organizer, flakes.week, flakes.event_date, flakes.vanid, flakes.eventsignupid, flakes.flakes, flakes.sched_flake, flakes.inv_flake from
+(
 select b.region, b.org_code, a.organizer, a.week, a.event_date, a.vanid, a.eventsignupid, case when (a.completed=0 and (a.scheduled+a.confirmed+a.left_msg+a.conf_twice>0)) then 'flake' else null end as flakes,
 case when (a.scheduled>0 and a.completed=0 and invited=0) then 'sched_flake' else null end as sched_flake,
 case when (a.invited>0 and a.completed=0) then 'inv_flake' else null end as inv_flake from
@@ -26,3 +28,19 @@ Order by 1) A
 join public.matchfile_orgcode b on b.organizer=a.organizer
 where (a.scheduled>0 or a.confirmed>0 or a.left_msg>0 or a.conf_twice>0 or a.invited>0)
 and a.event_date < getdate()
+) as flakes
+LEFT JOIN
+(
+    select t3.organizer, a.vanid 
+    from vansync_il_gov_2018.dnc_contactssurveyresponses_myc T1
+    JOIN
+    (
+        select vanid, max(datecanvassed) as date_applied from vansync_il_gov_2018.dnc_contactssurveyresponses_myc
+        where (surveyquestionid=262290)
+        group by 1 ) A on (a.vanid=t1.vanid and t1.datecanvassed=a.date_applied)
+        JOIN vansync_il_gov_2018.dnc_users T2 on t1.canvassedby=t2.userid
+        JOIN public.matchfile_orgcode T3 on t3.organizer=(t2.lastname+', '+t2.firstname)
+        where (t1.surveyresponseid=1096003 or t1.surveyresponseid=1096004)
+    ) as fellows
+on flakes.vanid=fellows.vanid
+    where fellows.vanid is null
