@@ -1,0 +1,45 @@
+select orgcode.region, orgcode.org_code, b.organizer, b.week, 
+count(case when (b.active is null and b.nearlyactive is null) then 1 else null end) as inactives, 
+count(case when b.active='Active' then 1 else null end) as actives, 
+count(case when (b.active is null and b.nearlyactive='nearlyActive') then 1 else null end) as nearlyactives
+from 
+(
+    select t1.organizer, t1.vanid, t1.week, t2.status as active, t1.status as nearlyactive, t1.everActive
+    from 
+    (
+        select organizer, nearactives.vanid, week, status, 
+        case when week <= firstweek then 'EverActive' else null end as everActive
+        from public.historic_nearlyactives as nearactives
+        join
+        (
+            select vanid, max(week) as firstweek
+            from public.historic_nearlyactives
+            where status = 'nearlyActive'
+            group by vanid
+        ) activeMins on nearactives.vanid = activeMins.vanid
+    ) as T1
+    left join 
+    (
+        select vanid, week, status from public.historic_actives
+        group by vanid, week, status
+    ) as T2 on (t1.vanid=t2.vanid and t1.week=t2.week)
+    left join
+    (
+        select t1.vanid, t2.eventstatusid, t3.week
+        from vansync_il_gov_2018.dnc_eventsignups T1
+        join vansync_il_gov_2018.dnc_eventsignupsstatuses T2 on t1.eventsignupid=t2.eventsignupid
+        join public.weeks T3 on T3.date=left(T1.datetimeoffsetbegin,10)
+        WHERE (
+          (t1.eventroleid='191345' OR t1.eventroleid='186915' OR t1.eventroleid='186911')
+          AND left(t2.datecreated,10) >= '2017-11-27'
+          AND left(t2.datecreated,10) <= getdate()
+          AND eventstatusid=2
+          and t1.currenteventsignupseventstatusid=t2.eventsignupseventstatusid
+        )
+        group by 1, 2, 3
+    ) as t3 on t1.vanid=t3.vanid and t1.week=t3.week
+    --where t3.vanid is not null
+) as b
+left join public.matchfile_orgcode orgcode on orgcode.organizer=b.organizer
+where b.everActive = 'EverActive'
+group by 1, 2, 3, 4
