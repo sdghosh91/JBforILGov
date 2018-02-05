@@ -1,0 +1,72 @@
+select org.region, actives.vanid, actives.week, actives.status, actives.everActive,
+    case when futures.future_scheduled = 1 then 1 else 0 end as bottom_scheduled,
+    case when call.canvasseds > 0 and (futures.future_scheduled <> 1 or futures.future_scheduled is null) then 1 else 0 end canvassed,
+    case when call.canvasseds = 0 and (futures.future_scheduled <> 1 or futures.future_scheduled is null) then 1 else 0 end attempted,
+    case when call.canvasseds is null and (futures.future_scheduled <> 1 or futures.future_scheduled is null) then 1 else 0 end not_attempted
+from 
+(
+    select actives.vanid, week, status, actives.organizer,
+        case when week <= firstweek then 'EverActive' else null end as everActive
+    from public.historic_actives as actives
+    join
+    (
+        select vanid, max(week) as firstweek
+        from public.historic_actives as actives
+        where status = 'Active'
+        group by vanid
+    ) activeMins on actives.vanid = activeMins.vanid
+) actives
+    left join
+        (
+        select shifts.vanid, tweeks.week,
+        max(case when first_status.eventstatusid in ('1', '11', '18', '15') 
+        and shifts.declined_status = 0 and shifts.no_show_status = 0 then 1 else 0 end) as future_scheduled
+            from
+            (
+            select t1.eventsignupid, t1.vanid, min(t2.datecreated) as first_date,
+            cast(left(t1.datetimeoffsetbegin,10) as date) as event_date,
+            max(case when (t2.eventstatusid='3') THEN 1 else 0 end) as declined_status,
+            max(case when (t2.eventstatusid='6') THEN 1 else 0 end) as no_show_status
+            from vansync_il_gov_2018.dnc_eventsignups T1
+            join vansync_il_gov_2018.dnc_eventsignupsstatuses T2 on t1.eventsignupid=t2.eventsignupid
+                WHERE 
+                (
+                (t1.eventroleid='191345' OR t1.eventroleid='186915' OR t1.eventroleid='186911')
+                AND left(t2.datecreated,10) >= '2017-07-24'
+                )
+                group by t1.eventsignupid, t1.vanid, event_date
+            ) shifts
+            join vansync_il_gov_2018.dnc_eventsignupsstatuses as first_status 
+            on shifts.eventsignupid=first_status.eventsignupid and shifts.first_date=first_status.datecreated
+        JOIN public.weeks as tweeks on tweeks.date=left(first_status.datecreated,10)
+        GROUP BY shifts.vanid, tweeks.week
+        ) as futures
+        on actives.vanid=futures.vanid and actives.week=futures.week
+    left join
+        (  
+        select tw.week, called.vanid,
+        sum(called.canvassed) as canvasseds
+        from
+            (
+            SELECT t1.vanid, left(t1.datecanvassed,10) AS date_contacted,
+            MAX(CASE resultid WHEN '14' THEN 1 ELSE 0 END) AS canvassed
+            FROM vansync_il_gov_2018.dnc_contactscontacts_myc T1
+            WHERE t1.contacttypeid='1' and t1.inputtypeid='10'
+            group by 1, 2
+            ) as called
+            JOIN
+            (
+            Select * from
+                (
+                select vanid, max(left(datecreated, 10)) as date_turf_applied
+                from vansync_il_gov_2018.dnc_contactsnotes_myc
+                Where notetext like 'zzzzzzFO_REGIONzzzzzz:%'
+                group by 1
+                ) T1
+            ) as notes on notes.vanid=called.vanid
+            join public.weeks tw on tw.date=called.date_contacted
+            Group by 1,2
+        ) as call 
+        on actives.vanid=call.vanid and actives.week=call.week
+Join public.matchfile_orgcode org on org.organizer=actives.organizer
+where actives.everActive = 'EverActive'
