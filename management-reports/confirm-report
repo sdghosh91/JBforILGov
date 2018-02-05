@@ -1,43 +1,56 @@
 --Confirm Report & All Tooltips
 
-select t4.region, t4.org_code, t5.week, 
-    scheduled.event_date, scheduled.eventsignupid, scheduled.vanid,
-    t4.organizer, 
-    case when (scheduled.confirmed>0 and scheduled.declined=0) then 1 else null end as confirmeds, 
-    count(case when scheduled>0 or confirmed>0 then 1 else null end) as scheduled_shifts,
-    completed as completed_shifts,
-    invited as invited_shifts,
-    count(case when invited>0 and completed>0 then 1 else null end) as inv_comp,
-    count(case when scheduled>0 and completed>0 and invited=0 then 1 else null end) as sched_comp
+select confirms.region, confirms.org_code, confirms.week, confirms.event_date, confirms.eventsignupid, confirms.vanid, confirms.organizer, confirms.confirmeds, confirms.scheduled_shifts, confirms.completed_shifts, confirms.invited_shifts, confirms.inv_comp, confirms.sched_comp, confirms.conf_comp, confirms.no_conf_comp
 from
 (
-    select signup.eventsignupid, signup.vanid, signup.canvassedby,
-signup.event_date, signup.completed, signup.scheduled, signup.declined, signup.confirmed, signup.left_msg, signup.no_show, signup.conf_twice, signup.invited
-    from
+select t4.region, t4.org_code, t5.week, scheduled.event_date, scheduled.eventsignupid, scheduled.vanid, t4.organizer, 
+case when (scheduled.confirmed>0 and scheduled.declined=0) then 1 else null end as confirmeds, 
+count(case when scheduled>0 or confirmed>0 or left_msg>0 or conf_twice>0 then 1 else null end) as scheduled_shifts,
+completed as completed_shifts, invited as invited_shifts,
+count(case when invited>0 and completed>0 and declined=0 and no_show=0 then 1 else null end) as inv_comp, 
+count(case when scheduled>0 and completed>0 and invited=0 then 1 else null end) as sched_comp,
+count(case when scheduled.confirmed>0 and scheduled.declined=0 and scheduled.no_show=0 and scheduled.completed>0 then 1 else null end) as conf_comp,
+count(case when scheduled.confirmed=0 and scheduled.declined=0 and scheduled.no_show=0 and scheduled.completed>0 and (scheduled.scheduled>0 or scheduled.invited>0 or scheduled.left_msg>0 or scheduled.conf_twice>0) then 1 else null end) as no_conf_comp
+from
     (
-        select t1.eventsignupid, t1.vanid, t1.canvassedby, min(t2.datecreated) as signup_date,
-            cast(left(t1.datetimeoffsetbegin,10) as date) as event_date,
-            count(case when (t2.eventstatusid='2') THEN 1 else null end) as completed,
-            count(case when (t2.eventstatusid='1') THEN 1 else null end) as scheduled,
-            count(case when (t2.eventstatusid='3') THEN 1 else null end) as declined,
-            count(case when (t2.eventstatusid='11') THEN 1 else null end) as confirmed,
-            count(case when (t2.eventstatusid='18') THEN 1 else null end) as left_msg,
-            count(case when (t2.eventstatusid='6') THEN 1 else null end) as no_show,
-            count(case when (t2.eventstatusid='15') THEN 1 else null end) as conf_twice,
-count(case when (t2.eventstatusid='4')THEN 1 else null end) as invited
+    select signup.eventsignupid, signup.vanid, signup.canvassedby, signup.event_date, signup.completed, signup.scheduled, signup.declined, signup.confirmed, signup.left_msg, signup.no_show, signup.conf_twice, signup.invited
+    from
+        (
+        select t1.eventsignupid, t1.vanid, t1.canvassedby, min(t2.datecreated) as signup_date, 
+cast(left(t1.datetimeoffsetbegin,10) as date) as event_date,
+        max(case when (t2.eventstatusid='2') THEN 1 else 0 end) as completed,
+        max(case when (t2.eventstatusid='1') THEN 1 else 0 end) as scheduled,
+        max(case when (t2.eventstatusid='3') THEN 1 else 0 end) as declined,
+        max(case when (t2.eventstatusid='11') THEN 1 else 0 end) as confirmed,
+        max(case when (t2.eventstatusid='18') THEN 1 else 0 end) as left_msg,
+        max(case when (t2.eventstatusid='6') THEN 1 else 0 end) as no_show,
+        max(case when (t2.eventstatusid='15') THEN 1 else 0 end) as conf_twice,
+        max(case when (t2.eventstatusid='4')THEN 1 else 0 end) as invited
         from vansync_il_gov_2018.dnc_eventsignups T1
         join vansync_il_gov_2018.dnc_eventsignupsstatuses T2 on t1.eventsignupid=t2.eventsignupid
         WHERE (
             (t1.eventroleid='191345' OR t1.eventroleid='186915' OR t1.eventroleid='186911')
             AND left(t2.datecreated,10) >= '2017-07-24'
             AND left(t2.datecreated,10) <= getdate()
-        )
+            )
         group by t1.eventsignupid, t1.vanid, t1.canvassedby, event_date
-) as signup
-) as scheduled
+        ) as signup
+    ) as scheduled
 join vansync_il_gov_2018.dnc_users t3 on t3.userid=scheduled.canvassedby
 join public.matchfile_orgcode t4 on t4.organizer=t3.lastname+', '+t3.firstname
 join public.weeks t5 on t5.date=scheduled.event_date
-group by t4.region, t4.org_code, t5.week, 
-    scheduled.event_date, scheduled.eventsignupid, scheduled.vanid,
-    t4.organizer, confirmeds, completed_shifts, invited_shifts
+group by t4.region, t4.org_code, t5.week, scheduled.event_date, scheduled.eventsignupid, scheduled.vanid, t4.organizer, confirmeds, completed_shifts, invited_shifts
+) as confirms
+LEFT JOIN
+(
+select t3.organizer, a.vanid from vansync_il_gov_2018.dnc_contactssurveyresponses_myc T1
+JOIN
+(select vanid, max(datecanvassed) as date_applied from vansync_il_gov_2018.dnc_contactssurveyresponses_myc
+where (surveyquestionid=262290)
+group by 1 ) A on (a.vanid=t1.vanid and t1.datecanvassed=a.date_applied)
+JOIN vansync_il_gov_2018.dnc_users T2 on t1.canvassedby=t2.userid
+JOIN public.matchfile_orgcode T3 on t3.organizer=(t2.lastname+', '+t2.firstname)
+where (t1.surveyresponseid=1096003 or t1.surveyresponseid=1096004)
+) as fellows
+on confirms.vanid=fellows.vanid
+where fellows.vanid is null
