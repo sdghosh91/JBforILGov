@@ -1,0 +1,10 @@
+select distinct t1.vanid, T6.returfed_org_code as org_code, 'zzzzzzFO_REGIONzzzzzz:'+T6.returfed_org_code as note from vansync_il_gov_2018.dnc_contacts_myc T1
+left JOIN (select vanid, notetext from vansync_il_gov_2018.dnc_contactsnotes_myc) T2 on T2.vanid=T1.vanid 
+left JOIN (select vanid, contacttypeid from vansync_il_gov_2018.dnc_contactscontacts_myc) T3 on T3.vanid=T1.vanid
+left JOIN vansync_il_gov_2018.dnc_pollinglocations T4 on t1.precinctid=t4.precinctid
+left JOIN vansync_il_gov_2018.analytics_person_il_update T5 on t1.precinctid=t5.vanprecinctid
+left JOIN public.turf T6 on t5.county_name+' '+t4.precinctname=t6.county_precinct
+
+WHERE (t2.notetext is null and (t3.contacttypeid is null or t3.contacttypeid<>1) and t6.returfed_org_code is not null and t4.statecode='IL' and t5.county_name='Cook')
+
+order by 1
